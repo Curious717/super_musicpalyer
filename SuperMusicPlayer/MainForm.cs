@@ -6,6 +6,7 @@ namespace SuperMusicPlayer;
 /// <summary>
 /// 主窗体 —— Super Music Player 的完整 UI 实现
 /// Tangerine Capital 设计风格：暖橘 + 奶油白 + 杂志排版感
+/// 采用响应式布局：控件随窗体大小自适应居中
 /// </summary>
 public class MainForm : Form
 {
@@ -18,15 +19,18 @@ public class MainForm : Form
     private static readonly Color TextDark = Color.FromArgb(44, 24, 16);
     private static readonly Color TextGray = Color.FromArgb(139, 115, 85);
     private static readonly Color ProgressTrack = Color.FromArgb(232, 213, 196);
-    private static readonly Color Gold = Color.FromArgb(255, 215, 0);
 
     // ==================== 核心组件 ====================
     private readonly AudioPlayer _player = new();
     private readonly PlaylistManager _playlist = new();
     private readonly System.Windows.Forms.Timer _posTimer = new();
 
+    // ==================== 需要动态布局的容器 ====================
+    private Panel _nowPlayingCard = null!;
+    private Panel _controlBar = null!;
+    private Panel _bottomBar = null!;
+
     // ==================== UI 控件 ====================
-    private Panel _titleBar = null!;
     private Label _lblNowPlaying = null!;
     private Label _lblTitle = null!;
     private Label _lblArtist = null!;
@@ -45,10 +49,15 @@ public class MainForm : Form
     private RoundedButton _btnAdd = null!;
     private RoundedButton _btnAddFolder = null!;
     private RoundedButton _btnClear = null!;
+    private Label _lblVolume = null!;
+    private Label _lblMode = null!;
 
     private bool _isDraggingProgress;
     private bool _isUserSeeking;
     private float _dragProgress;
+
+    private const int DESIGN_CONTENT_WIDTH = 792;
+    private const int SIDE_PADDING = 24;
 
     public MainForm()
     {
@@ -56,6 +65,8 @@ public class MainForm : Form
         BindEvents();
         _posTimer.Interval = 250;
         _posTimer.Start();
+        // 初始布局
+        LayoutChildren();
     }
 
     // ==================== UI 初始化 ====================
@@ -64,183 +75,161 @@ public class MainForm : Form
         // 窗体基础设置
         Text = "Super Music Player";
         Size = new Size(860, 620);
-        MinimumSize = new Size(600, 400);
+        MinimumSize = new Size(620, 480);
         BackColor = Cream;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Microsoft YaHei UI", 10F);
-        Icon = SystemIcons.WinLogo;
+
+        // 响应式布局：Resize 时重新计算位置
+        Resize += (s, e) => LayoutChildren();
 
         // === 顶部标题栏 ===
-        _titleBar = new Panel
+        var titleBar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 52,
-            BackColor = Tangerine,
-            Padding = new Padding(20, 0, 20, 0)
+            Height = 48,
+            BackColor = Tangerine
         };
         var lblAppTitle = new Label
         {
-            Text = "Super Music Player",
-            Font = new Font("Microsoft YaHei UI", 14F, FontStyle.Bold),
+            Text = "🎵  Super Music Player",
+            Font = new Font("Microsoft YaHei UI", 13F, FontStyle.Bold),
             ForeColor = White,
             AutoSize = true,
             Location = new Point(20, 12)
         };
-        _titleBar.Controls.Add(lblAppTitle);
-        Controls.Add(_titleBar);
+        titleBar.Controls.Add(lblAppTitle);
+        Controls.Add(titleBar);
 
-        // === 主体内容区 ===
-        var mainPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Cream,
-            Padding = new Padding(24, 16, 24, 16)
-        };
-
-        // --- 当前播放信息卡片 ---
-        var nowPlayingCard = CreateCard(24, 16, 792, 140);
+        // === 当前播放信息卡片 ===
+        _nowPlayingCard = new Panel { BackColor = White };
+        _nowPlayingCard.Paint += DrawCardBg;
 
         _lblNowPlaying = new Label
         {
             Text = "♫  NOW PLAYING",
             Font = new Font("Microsoft YaHei UI", 8F, FontStyle.Bold),
             ForeColor = Tangerine,
-            Location = new Point(24, 14),
-            AutoSize = true
+            AutoSize = true,
+            Location = new Point(20, 14)
         };
-        nowPlayingCard.Controls.Add(_lblNowPlaying);
+        _nowPlayingCard.Controls.Add(_lblNowPlaying);
 
         _lblTitle = new Label
         {
             Text = "未在播放",
-            Font = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold),
+            Font = new Font("Microsoft YaHei UI", 15F, FontStyle.Bold),
             ForeColor = TextDark,
-            Location = new Point(24, 36),
-            AutoSize = true,
-            MaximumSize = new Size(740, 28)
+            AutoSize = false,
+            Location = new Point(20, 34),
+            Size = new Size(0, 0), // 由 Layout 设置
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true
         };
-        nowPlayingCard.Controls.Add(_lblTitle);
+        _nowPlayingCard.Controls.Add(_lblTitle);
 
         _lblArtist = new Label
         {
             Text = "添加音乐文件开始播放",
-            Font = new Font("Microsoft YaHei UI", 11F),
+            Font = new Font("Microsoft YaHei UI", 10F),
             ForeColor = TextGray,
-            Location = new Point(24, 68),
-            AutoSize = true
+            AutoSize = false,
+            Location = new Point(20, 64),
+            Size = new Size(0, 0), // 由 Layout 设置
+            TextAlign = ContentAlignment.MiddleLeft
         };
-        nowPlayingCard.Controls.Add(_lblArtist);
+        _nowPlayingCard.Controls.Add(_lblArtist);
 
         // 自定义进度条
         _progressBar = new Panel
         {
-            Location = new Point(24, 100),
-            Size = new Size(620, 8),
-            BackColor = ProgressTrack,
+            Location = new Point(20, 98),
+            Size = new Size(700, 6),
             Cursor = Cursors.Hand
         };
         _progressBar.Paint += DrawProgressBar;
         _progressBar.MouseDown += ProgressBar_MouseDown;
         _progressBar.MouseMove += ProgressBar_MouseMove;
         _progressBar.MouseUp += ProgressBar_MouseUp;
-        nowPlayingCard.Controls.Add(_progressBar);
+        _nowPlayingCard.Controls.Add(_progressBar);
 
         _lblCurrentTime = new Label
         {
             Text = "00:00",
-            Font = new Font("Microsoft YaHei UI", 9F),
+            Font = new Font("Microsoft YaHei UI", 8F),
             ForeColor = TextGray,
-            Location = new Point(24, 112),
-            AutoSize = true
+            AutoSize = true,
+            Location = new Point(20, 108)
         };
-        nowPlayingCard.Controls.Add(_lblCurrentTime);
+        _nowPlayingCard.Controls.Add(_lblCurrentTime);
 
         _lblTotalTime = new Label
         {
             Text = "00:00",
-            Font = new Font("Microsoft YaHei UI", 9F),
+            Font = new Font("Microsoft YaHei UI", 8F),
             ForeColor = TextGray,
-            Location = new Point(590, 112),
             AutoSize = true,
             TextAlign = ContentAlignment.TopRight
         };
-        nowPlayingCard.Controls.Add(_lblTotalTime);
+        _nowPlayingCard.Controls.Add(_lblTotalTime);
 
-        mainPanel.Controls.Add(nowPlayingCard);
+        Controls.Add(_nowPlayingCard);
 
-        // --- 控制按钮行 ---
-        var controlBar = new Panel
-        {
-            Location = new Point(24, 176),
-            Size = new Size(792, 52),
-            BackColor = Color.Transparent
-        };
+        // === 控制按钮行 ===
+        _controlBar = new Panel { BackColor = Color.Transparent, Height = 48 };
 
-        // 播放控制按钮（pill buttons）
-        int btnY = 4;
+        int btnY = 2;
         _btnPrev = new RoundedButton(White, TangerineLight, Tangerine)
-        { Text = "⏮", Location = new Point(0, btnY), Size = new Size(44, 44) };
+        { Text = "⏮", Location = new Point(0, btnY), Size = new Size(40, 40) };
 
         _btnPlayPause = new RoundedButton(Tangerine, TangerineDark, White)
-        { Text = "▶", Location = new Point(54, btnY), Size = new Size(52, 44) };
+        { Text = "▶", Location = new Point(48, btnY), Size = new Size(48, 40) };
 
         _btnStop = new RoundedButton(White, TangerineLight, Tangerine)
-        { Text = "⏹", Location = new Point(116, btnY), Size = new Size(44, 44) };
+        { Text = "⏹", Location = new Point(104, btnY), Size = new Size(40, 40) };
 
         _btnNext = new RoundedButton(White, TangerineLight, Tangerine)
-        { Text = "⏭", Location = new Point(170, btnY), Size = new Size(44, 44) };
+        { Text = "⏭", Location = new Point(152, btnY), Size = new Size(40, 40) };
 
-        controlBar.Controls.AddRange([_btnPrev, _btnPlayPause, _btnStop, _btnNext]);
+        _controlBar.Controls.AddRange([_btnPrev, _btnPlayPause, _btnStop, _btnNext]);
 
-        // 分隔线
-        var sep = new Label
-        {
-            Text = "│",
-            Font = new Font("Microsoft YaHei UI", 14F),
-            ForeColor = ProgressTrack,
-            Location = new Point(228, 10),
-            AutoSize = true
-        };
-        controlBar.Controls.Add(sep);
-
-        // 音量标签
-        var lblVolume = new Label
+        // 音量
+        _lblVolume = new Label
         {
             Text = "🔊",
-            Font = new Font("Microsoft YaHei UI", 12F),
-            Location = new Point(250, 14),
+            Font = new Font("Microsoft YaHei UI", 10F),
+            Location = new Point(210, 12),
             AutoSize = true
         };
-        controlBar.Controls.Add(lblVolume);
+        _controlBar.Controls.Add(_lblVolume);
 
-        // 音量滑块
         _volumeSlider = new TrackBar
         {
-            Location = new Point(280, 12),
-            Size = new Size(100, 30),
+            Location = new Point(240, 8),
+            Size = new Size(90, 30),
             Minimum = 0,
             Maximum = 100,
             Value = 80,
             TickStyle = TickStyle.None,
             BackColor = Cream
         };
-        controlBar.Controls.Add(_volumeSlider);
+        _controlBar.Controls.Add(_volumeSlider);
 
-        // 播放模式选择器
-        var lblMode = new Label
+        // 播放模式
+        _lblMode = new Label
         {
             Text = "模式",
             Font = new Font("Microsoft YaHei UI", 9F),
             ForeColor = TextGray,
-            Location = new Point(395, 16),
+            Location = new Point(340, 14),
             AutoSize = true
         };
-        controlBar.Controls.Add(lblMode);
+        _controlBar.Controls.Add(_lblMode);
 
         _cmbMode = new ComboBox
         {
-            Location = new Point(430, 12),
-            Size = new Size(90, 28),
+            Location = new Point(372, 10),
+            Size = new Size(90, 26),
             DropDownStyle = ComboBoxStyle.DropDownList,
             Font = new Font("Microsoft YaHei UI", 9F),
             FlatStyle = FlatStyle.Flat,
@@ -249,15 +238,13 @@ public class MainForm : Form
         };
         _cmbMode.Items.AddRange(["顺序播放", "随机播放", "单曲循环", "列表循环"]);
         _cmbMode.SelectedIndex = 0;
-        controlBar.Controls.Add(_cmbMode);
+        _controlBar.Controls.Add(_cmbMode);
 
-        mainPanel.Controls.Add(controlBar);
+        Controls.Add(_controlBar);
 
-        // --- 播放列表 (ListView) ---
+        // === 播放列表 ===
         _listView = new ListView
         {
-            Location = new Point(24, 236),
-            Size = new Size(792, 220),
             View = View.Details,
             FullRowSelect = true,
             MultiSelect = true,
@@ -269,12 +256,11 @@ public class MainForm : Form
             OwnerDraw = true,
             GridLines = false
         };
-        _listView.Columns.Add("", 40);
-        _listView.Columns.Add("标题", 350);
-        _listView.Columns.Add("歌手", 220);
-        _listView.Columns.Add("时长", 80);
+        _listView.Columns.Add("", 38);
+        _listView.Columns.Add("标题", 340);
+        _listView.Columns.Add("歌手", 200);
+        _listView.Columns.Add("时长", 70);
 
-        // 手动绘制 ListView 项（实现卡片风格的交替行颜色）
         _listView.DrawColumnHeader += (s, e) =>
         {
             e.Graphics.FillRectangle(new SolidBrush(White), e.Bounds);
@@ -300,8 +286,7 @@ public class MainForm : Form
             {
                 Alignment = e.ColumnIndex switch
                 {
-                    0 => StringAlignment.Center,  // 序号居中
-                    3 => StringAlignment.Center,  // 时长居中
+                    0 => StringAlignment.Center,
                     _ => StringAlignment.Near
                 },
                 LineAlignment = StringAlignment.Center
@@ -312,7 +297,6 @@ public class MainForm : Form
         };
         _listView.DrawItem += (s, e) => { e.DrawDefault = false; };
 
-        // 允许拖放文件
         _listView.AllowDrop = true;
         _listView.DragEnter += (s, e) =>
         {
@@ -321,7 +305,6 @@ public class MainForm : Form
         };
         _listView.DragDrop += ListView_DragDrop;
 
-        // 右键菜单
         var ctxMenu = new ContextMenuStrip();
         ctxMenu.Items.Add("播放", null, (s, e) => PlaySelected());
         ctxMenu.Items.Add("从列表移除", null, (s, e) => RemoveSelected());
@@ -329,43 +312,35 @@ public class MainForm : Form
         ctxMenu.Items.Add("打开文件位置", null, (s, e) => OpenFileLocation());
         _listView.ContextMenuStrip = ctxMenu;
 
-        mainPanel.Controls.Add(_listView);
+        Controls.Add(_listView);
 
-        // --- 底部操作栏 ---
-        var bottomBar = new Panel
-        {
-            Location = new Point(24, 462),
-            Size = new Size(792, 44),
-            BackColor = Color.Transparent
-        };
+        // === 底部操作栏 ===
+        _bottomBar = new Panel { BackColor = Color.Transparent, Height = 44 };
 
         _btnAdd = new RoundedButton(Tangerine, TangerineDark, White)
-        { Text = "＋ 添加文件", Location = new Point(0, 2), Size = new Size(110, 40) };
+        { Text = "＋ 添加文件", Location = new Point(0, 2), Size = new Size(105, 38) };
 
         _btnAddFolder = new RoundedButton(White, TangerineLight, Tangerine)
-        { Text = "📁 添加文件夹", Location = new Point(120, 2), Size = new Size(120, 40) };
+        { Text = "📁 添加文件夹", Location = new Point(112, 2), Size = new Size(115, 38) };
 
         _btnClear = new RoundedButton(White, TangerineLight, TextGray)
-        { Text = "🗑 清空列表", Location = new Point(250, 2), Size = new Size(110, 40) };
+        { Text = "🗑 清空列表", Location = new Point(234, 2), Size = new Size(105, 38) };
 
         _lblCount = new Label
         {
             Text = "共 0 首",
             Font = new Font("Microsoft YaHei UI", 9F),
             ForeColor = TextGray,
-            Location = new Point(700, 14),
             AutoSize = true
         };
-        bottomBar.Controls.AddRange([_btnAdd, _btnAddFolder, _btnClear, _lblCount]);
-        mainPanel.Controls.Add(bottomBar);
-
-        Controls.Add(mainPanel);
+        _bottomBar.Controls.AddRange([_btnAdd, _btnAddFolder, _btnClear, _lblCount]);
+        Controls.Add(_bottomBar);
 
         // === 底部状态栏 ===
         _lblStatus = new Label
         {
             Dock = DockStyle.Bottom,
-            Height = 26,
+            Height = 24,
             Text = "  就绪 — 添加 MP3 文件开始播放",
             Font = new Font("Microsoft YaHei UI", 8.5F),
             ForeColor = White,
@@ -373,35 +348,65 @@ public class MainForm : Form
             TextAlign = ContentAlignment.MiddleLeft
         };
         Controls.Add(_lblStatus);
-
-        // 设置 tab 顺序
-        _btnAdd.TabIndex = 0;
-        _btnAddFolder.TabIndex = 1;
-        _listView.TabIndex = 2;
-        _btnPlayPause.TabIndex = 3;
     }
 
-    /// <summary>创建白色圆角卡片面板</summary>
-    private static Panel CreateCard(int x, int y, int w, int h)
+    /// <summary>响应式布局：计算居中偏移和各控件位置/尺寸</summary>
+    private void LayoutChildren()
     {
-        var card = new Panel
-        {
-            Location = new Point(x, y),
-            Size = new Size(w, h),
-            BackColor = White,
-            Padding = new Padding(8)
-        };
-        card.Paint += (s, e) =>
-        {
-            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            using var path = GetRoundRect(card.ClientRectangle, 14);
-            using var brush = new SolidBrush(White);
-            e.Graphics.FillPath(brush, path);
-            // 轻微阴影效果
-            using var pen = new Pen(Color.FromArgb(30, 0, 0, 0), 1);
-            e.Graphics.DrawPath(pen, path);
-        };
-        return card;
+        int titleBarH = 48;
+        int statusH = 24;
+        int availableW = ClientSize.Width - SIDE_PADDING * 2;
+        if (availableW < 400) availableW = 400;
+        int left = (ClientSize.Width - availableW) / 2;
+        if (left < 0) left = 0;
+
+        // 卡片高度: 固定130（标题区+进度条+时间）
+        int cardH = 130;
+        int cardTop = titleBarH + 12;
+        _nowPlayingCard.SetBounds(left, cardTop, availableW, cardH);
+
+        // 卡片内子控件
+        _lblTitle.Size = new Size(availableW - 40, 26);
+        _lblArtist.Size = new Size(availableW - 40, 22);
+        _progressBar.Size = new Size(availableW - 40, 6);
+        _lblTotalTime.Location = new Point(availableW - 40 - _lblTotalTime.Width, 108);
+
+        // 控制栏
+        int ctrlTop = cardTop + cardH + 8;
+        _controlBar.SetBounds(left, ctrlTop, availableW, 48);
+
+        // 音量滑块位置根据可用宽度动态调整
+        _volumeSlider.Left = Math.Min(240, availableW - 180);
+        _lblVolume.Left = _volumeSlider.Left - 30;
+        _lblMode.Left = _volumeSlider.Right + 10;
+        _cmbMode.Left = _lblMode.Right + 6;
+
+        // 播放列表
+        int listTop = ctrlTop + 56;
+        int bottomH = 46;
+        int statusTop = ClientSize.Height - statusH;
+        int listBottom = statusTop - bottomH - 8;
+        _listView.SetBounds(left, listTop, availableW, listBottom - listTop);
+
+        // 底部栏
+        _bottomBar.SetBounds(left, listBottom + 4, availableW, bottomH);
+        _lblCount.Location = new Point(availableW - _lblCount.Width - 8, 12);
+    }
+
+    /// <summary>绘制卡片圆角背景（无黑边）</summary>
+    private static void DrawCardBg(object? sender, PaintEventArgs e)
+    {
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var panel = (Panel)sender!;
+        var rect = panel.ClientRectangle;
+        // 缩小 1px 避免边缘溢出
+        rect.Inflate(-1, -1);
+        using var path = GetRoundRect(rect, 12);
+        using var brush = new SolidBrush(White);
+        e.Graphics.FillPath(brush, path);
+        // 极浅的暖色边框，替代黑色边框
+        using var pen = new Pen(Color.FromArgb(60, 210, 180, 140), 1);
+        e.Graphics.DrawPath(pen, path);
     }
 
     private static System.Drawing.Drawing2D.GraphicsPath GetRoundRect(Rectangle rect, int r)
@@ -419,7 +424,6 @@ public class MainForm : Form
     // ==================== 事件绑定 ====================
     private void BindEvents()
     {
-        // 播放器事件
         _player.PositionChanged += (cur, total) =>
         {
             if (!_isUserSeeking)
@@ -433,7 +437,6 @@ public class MainForm : Form
         _player.StateChanged += state =>
         {
             _btnPlayPause.Text = state == PlaybackState.Playing ? "⏸" : "▶";
-            _btnPlayPause.BackColor = state == PlaybackState.Playing ? Tangerine : Tangerine;
             _lblStatus.Text = state switch
             {
                 PlaybackState.Playing => "  正在播放...",
@@ -444,11 +447,9 @@ public class MainForm : Form
 
         _player.PlaybackFinished += () =>
         {
-            // NAudio 回调在非 UI 线程，需切换到 UI 线程
             BeginInvoke(() => PlayNext());
         };
 
-        // 播放列表事件
         _playlist.CurrentTrackChanged += track =>
         {
             if (track != null)
@@ -468,7 +469,6 @@ public class MainForm : Form
 
         _playlist.PlaylistChanged += RefreshListView;
 
-        // 按钮事件
         _btnPlayPause.Click += (s, e) =>
         {
             if (_player.State == PlaybackState.Playing)
@@ -486,21 +486,16 @@ public class MainForm : Form
         _btnAddFolder.Click += (s, e) => AddFolder();
         _btnClear.Click += (s, e) => { _playlist.Clear(); _player.Stop(); };
 
-        // 双击列表播放
         _listView.DoubleClick += (s, e) => PlaySelected();
 
-        // 音量
         _volumeSlider.ValueChanged += (s, e) =>
             _player.Volume = _volumeSlider.Value / 100f;
 
-        // 播放模式
         _cmbMode.SelectedIndexChanged += (s, e) =>
             _playlist.Mode = (PlayMode)_cmbMode.SelectedIndex;
 
-        // 定时器更新位置
         _posTimer.Tick += (s, e) => _player.NotifyPosition();
 
-        // 键盘快捷键
         KeyPreview = true;
         KeyDown += (s, e) =>
         {
@@ -512,7 +507,6 @@ public class MainForm : Form
             }
         };
 
-        // 关闭时释放资源
         FormClosing += (s, e) =>
         {
             _posTimer.Stop();
@@ -526,28 +520,25 @@ public class MainForm : Form
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         var rect = _progressBar.ClientRectangle;
 
-        // 背景轨道
-        using var trackPath = GetRoundRect(rect, 4);
+        using var trackPath = GetRoundRect(rect, 3);
         using var trackBrush = new SolidBrush(ProgressTrack);
         e.Graphics.FillPath(trackBrush, trackPath);
 
-        // 进度填充
         double progress = _isUserSeeking ? _dragProgress : _player.Progress;
         int fillWidth = (int)(rect.Width * progress);
         if (fillWidth > 0)
         {
             var fillRect = new Rectangle(0, 0, Math.Min(fillWidth, rect.Width), rect.Height);
-            using var fillPath = GetRoundRect(fillRect, 4);
+            using var fillPath = GetRoundRect(fillRect, 3);
             using var fillBrush = new SolidBrush(Tangerine);
             e.Graphics.FillPath(fillBrush, fillPath);
         }
 
-        // 拖动圆点
-        int dotX = (int)(rect.Width * progress) - 5;
+        int dotX = (int)(rect.Width * progress) - 4;
         if (dotX < 0) dotX = 0;
-        if (dotX > rect.Width - 10) dotX = rect.Width - 10;
+        if (dotX > rect.Width - 8) dotX = rect.Width - 8;
         using var dotBrush = new SolidBrush(TangerineDark);
-        e.Graphics.FillEllipse(dotBrush, dotX, -2, 12, 12);
+        e.Graphics.FillEllipse(dotBrush, dotX, -2, 10, 10);
     }
 
     private void ProgressBar_MouseDown(object? sender, MouseEventArgs e)
@@ -559,8 +550,6 @@ public class MainForm : Form
             _dragProgress = (float)e.X / _progressBar.Width;
             _dragProgress = Math.Clamp(_dragProgress, 0f, 1f);
             _progressBar.Invalidate();
-
-            // 实时更新时间显示
             var seekTime = TimeSpan.FromSeconds(_player.TotalTime.TotalSeconds * _dragProgress);
             _lblCurrentTime.Text = FormatTime(seekTime);
         }
@@ -635,7 +624,6 @@ public class MainForm : Form
 
     private void RemoveSelected()
     {
-        // 从大到小移除，避免索引偏移
         var indices = _listView.SelectedIndices.Cast<int>().OrderByDescending(i => i).ToList();
         foreach (var i in indices)
             _playlist.RemoveTrack(i);
