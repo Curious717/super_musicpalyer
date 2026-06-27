@@ -26,7 +26,7 @@ public class MainForm : Form
     private readonly System.Windows.Forms.Timer _posTimer = new();
 
     // ==================== 需要动态布局的容器 ====================
-    private Panel _nowPlayingCard = null!;
+    private NoBorderPanel _nowPlayingCard = null!;
     private Panel _controlBar = null!;
     private Panel _bottomBar = null!;
 
@@ -34,7 +34,7 @@ public class MainForm : Form
     private Label _lblNowPlaying = null!;
     private Label _lblTitle = null!;
     private Label _lblArtist = null!;
-    private Panel _progressBar = null!;
+    private NoBorderPanel _progressBar = null!;
     private Label _lblCurrentTime = null!;
     private Label _lblTotalTime = null!;
     private ListView _listView = null!;
@@ -102,7 +102,8 @@ public class MainForm : Form
         Controls.Add(titleBar);
 
         // === 当前播放信息卡片 ===
-        _nowPlayingCard = new Panel { BackColor = White };
+        _nowPlayingCard = new NoBorderPanel();
+        // 在 NoBorderPanel 透明背景上绘制白色圆角卡片
         _nowPlayingCard.Paint += DrawCardBg;
 
         _lblNowPlaying = new Label
@@ -140,8 +141,8 @@ public class MainForm : Form
         };
         _nowPlayingCard.Controls.Add(_lblArtist);
 
-        // 自定义进度条
-        _progressBar = new Panel
+        // 自定义进度条（透明背景，圆角矩形外不显示色块）
+        _progressBar = new NoBorderPanel
         {
             Location = new Point(20, 98),
             Size = new Size(700, 6),
