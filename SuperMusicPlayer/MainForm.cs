@@ -26,7 +26,7 @@ public class MainForm : Form
     private readonly System.Windows.Forms.Timer _posTimer = new();
 
     // ==================== 需要动态布局的容器 ====================
-    private NoBorderPanel _nowPlayingCard = null!;
+    private RoundedPanel _nowPlayingCard = null!;
     private Panel _controlBar = null!;
     private Panel _bottomBar = null!;
 
@@ -34,7 +34,7 @@ public class MainForm : Form
     private Label _lblNowPlaying = null!;
     private Label _lblTitle = null!;
     private Label _lblArtist = null!;
-    private NoBorderPanel _progressBar = null!;
+    private RoundedPanel _progressBar = null!;
     private Label _lblCurrentTime = null!;
     private Label _lblTotalTime = null!;
     private ListView _listView = null!;
@@ -102,9 +102,7 @@ public class MainForm : Form
         Controls.Add(titleBar);
 
         // === 当前播放信息卡片 ===
-        _nowPlayingCard = new NoBorderPanel();
-        // 在 NoBorderPanel 透明背景上绘制白色圆角卡片
-        _nowPlayingCard.Paint += DrawCardBg;
+        _nowPlayingCard = new RoundedPanel { BackColor = White, CornerRadius = 12 };
 
         _lblNowPlaying = new Label
         {
@@ -142,10 +140,12 @@ public class MainForm : Form
         _nowPlayingCard.Controls.Add(_lblArtist);
 
         // 自定义进度条（透明背景，圆角矩形外不显示色块）
-        _progressBar = new NoBorderPanel
+        _progressBar = new RoundedPanel
         {
             Location = new Point(20, 98),
             Size = new Size(700, 6),
+            BackColor = ProgressTrack,
+            CornerRadius = 3,
             Cursor = Cursors.Hand
         };
         _progressBar.Paint += DrawProgressBar;
@@ -394,22 +394,6 @@ public class MainForm : Form
         _lblCount.Location = new Point(availableW - _lblCount.Width - 8, 12);
     }
 
-    /// <summary>绘制卡片圆角背景（无黑边）</summary>
-    private static void DrawCardBg(object? sender, PaintEventArgs e)
-    {
-        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        var panel = (Panel)sender!;
-        var rect = panel.ClientRectangle;
-        // 缩小 1px 避免边缘溢出
-        rect.Inflate(-1, -1);
-        using var path = GetRoundRect(rect, 12);
-        using var brush = new SolidBrush(White);
-        e.Graphics.FillPath(brush, path);
-        // 极浅的暖色边框，替代黑色边框
-        using var pen = new Pen(Color.FromArgb(60, 210, 180, 140), 1);
-        e.Graphics.DrawPath(pen, path);
-    }
-
     private static System.Drawing.Drawing2D.GraphicsPath GetRoundRect(Rectangle rect, int r)
     {
         var path = new System.Drawing.Drawing2D.GraphicsPath();
@@ -521,10 +505,6 @@ public class MainForm : Form
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         var rect = _progressBar.ClientRectangle;
 
-        using var trackPath = GetRoundRect(rect, 3);
-        using var trackBrush = new SolidBrush(ProgressTrack);
-        e.Graphics.FillPath(trackBrush, trackPath);
-
         double progress = _isUserSeeking ? _dragProgress : _player.Progress;
         int fillWidth = (int)(rect.Width * progress);
         if (fillWidth > 0)
@@ -535,6 +515,7 @@ public class MainForm : Form
             e.Graphics.FillPath(fillBrush, fillPath);
         }
 
+        // 拖动圆点
         int dotX = (int)(rect.Width * progress) - 4;
         if (dotX < 0) dotX = 0;
         if (dotX > rect.Width - 8) dotX = rect.Width - 8;
